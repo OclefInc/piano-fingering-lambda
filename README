@@ -51,7 +51,7 @@ aws iam put-role-policy --role-name piano-fingering-lambda-role \
   --policy-name s3-access --policy-document file://lambda-s3-policy.json
 
 4.  Build docker image
-docker build -t piano-fingering:latest .
+docker buildx build --platform linux/amd64 -t piano-fingering:latest .
 ## Local Testing (Optional)
 
 Before deploying to AWS, you can test your Docker container locally:
@@ -109,7 +109,7 @@ aws s3api put-bucket-notification-configuration \
 --notification-configuration '{
     "LambdaFunctionConfigurations": [
     {
-        "LambdaFunctionArn": "arn:aws:lambda:'${REGION}':'${ACCOUNT_ID}':function:PianoFingeringProcessor",
+        "LambdaFunctionArn": "arn:aws:lambda:'${REGION}':'${ACCOUNT_ID}':function:PianoFingeringService",
         "Events": ["s3:ObjectCreated:*"],
         "Filter": {
         "Key": {
