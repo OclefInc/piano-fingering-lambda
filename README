@@ -22,8 +22,108 @@ This project is designed to assist with piano fingering suggestions using a serv
 ## Usage
 
 1. Deploy the Lambda function using your preferred deployment method (e.g., AWS CLI, SAM, or Serverless Framework).
-2. Send a request to the deployed endpoint with the musical notes as input.
-3. Receive the suggested piano fingerings in the response.
+# Create a new directory for the deployment package
+mkdir -p deployment/package
+
+# Install dependencies to the package directory
+pip install -t deployment/package/ music21 pianoplayer
+
+# Copy your code files to the package
+cp -r pianoplayer/ lambda_function.py deployment/package/
+
+# Create a ZIP file
+cd deployment/package
+zip -r ../piano-fingering-lambda.zip .
+cd ../..
+
+2. create S3 buckets
+# Using AWS CLI
+aws s3 mb s3://piano-fingering-input
+aws s3 mb s3://piano-fingering-output
+
+3. Create IAM Role
+# Create IAM role
+aws iam create-role --role-name piano-fingering-lambda-role \
+  --assume-role-policy-document '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}'
+
+# Attach the policy
+aws iam put-role-policy --role-name piano-fingering-lambda-role \
+  --policy-name s3-access --policy-document file://lambda-s3-policy.json
+
+4.  Build docker image
+docker build -t piano-fingering:latest .
+## Local Testing (Optional)
+
+Before deploying to AWS, you can test your Docker container locally:
+
+```bash
+# Run the container locally
+docker run --rm -p 9000:8080 piano-fingering:latest
+
+# In another terminal, test with a sample event
+curl "http://localhost:9000/2015-03-31/functions/function/invocations" \
+  -d '{"bucket": "test-bucket", "key": "test.musicxml"}'
+
+5. Create an ECR repository
+aws ecr create-repository --repository-name piano-fingering
+
+6.  Geting AWS account ID and region
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION=$(aws configure get region)
+
+7. Log in to Amazon ECR
+aws ecr get-login-password | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+
+8.  Tag and push your Docker image
+docker tag piano-fingering:latest ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/piano-fingering:latest
+docker push ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/piano-fingering:latest
+
+9.  Create lambda function
+# Create a new Lambda function with a different name
+aws lambda create-function \
+  --function-name PianoFingeringService \
+  --package-type Image \
+  --code ImageUri=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/piano-fingering:latest \
+  --role arn:aws:iam::${ACCOUNT_ID}:role/piano-fingering-lambda-role \
+  --timeout 300 \
+  --memory-size 512 \
+  --environment Variables="{OUTPUT_S3_BUCKET=piano-fingering-output}"
+
+9a.  Or update lambda function
+aws lambda update-function-code \
+  --function-name PianoFingeringService \
+  --image-uri ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/piano-fingering:latest
+
+10.  Setup S3 trigger
+# Add permission for S3 to invoke the Lambda function
+aws lambda add-permission \
+    --function-name PianoFingeringService \
+    --statement-id s3-trigger \
+    --action lambda:InvokeFunction \
+    --principal s3.amazonaws.com \
+    --source-arn arn:aws:s3:::piano-fingering-input
+
+# Configure S3 bucket notification to trigger Lambda
+aws s3api put-bucket-notification-configuration \
+--bucket piano-fingering-input \
+--notification-configuration '{
+    "LambdaFunctionConfigurations": [
+    {
+        "LambdaFunctionArn": "arn:aws:lambda:'${REGION}':'${ACCOUNT_ID}':function:PianoFingeringProcessor",
+        "Events": ["s3:ObjectCreated:*"],
+        "Filter": {
+        "Key": {
+            "FilterRules": [
+            {
+                "Name": "suffix",
+                "Value": ".musicxml"
+            }
+            ]
+        }
+        }
+    }
+    ]
+}'
 
 ## Contributing
 
