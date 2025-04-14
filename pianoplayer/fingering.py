@@ -1,6 +1,7 @@
 import os
 import tempfile
 from music21 import converter
+from music21.articulations import Fingering
 from pianoplayer.hand import Hand
 from pianoplayer.scorereader import reader
 from pianoplayer.core import annotate_fingers_xml
@@ -69,6 +70,29 @@ class FingeringGenerator:
         # Annotate the score with fingerings, passing the args
         sf = annotate_fingers_xml(sf, rh, args=self.args, is_right=True)
         sf = annotate_fingers_xml(sf, lh, args=self.args, is_right=False)
+
+        # Remove movement-title if it exists
+        if hasattr(sf, 'metadata') and sf.metadata is not None:
+            if hasattr(sf.metadata, 'movementName'):
+                sf.metadata.movementName = None
+            # Remove composer if it's set to Music21
+            if hasattr(sf.metadata, 'composer') and sf.metadata.composer == None:
+                sf.metadata.composer = ''
+            # Also check and clear other common metadata fields that might be auto-populated
+            if hasattr(sf.metadata, 'title') and ".musicxml" in sf.metadata.title:
+                sf.metadata.title = None
+
+        # Clean creator tags directly from the internal representation
+        for part in sf.parts:
+            if hasattr(part, '_mxScore'):
+                if hasattr(part._mxScore, 'identificationCreators'):
+                    # Filter out the Music21 composer entry
+                    if part._mxScore.identificationCreators:
+                        part._mxScore.identificationCreators = [
+                            creator for creator in part._mxScore.identificationCreators
+                            if not (hasattr(creator, 'type') and creator.type == 'composer'
+                                    and hasattr(creator, 'value') and creator.value == 'Music21')
+                        ]
 
         # Write the annotated score to file
         sf.write('xml', fp=output_path)
