@@ -125,6 +125,51 @@ aws s3api put-bucket-notification-configuration \
     ]
 }'
 
+11.  Create SNS Topic
+# Create the SNS topic
+aws sns create-topic --name MusicXmlFingeringFileNotification
+
+# Save the topic ARN for later use
+TOPIC_ARN=$(aws sns create-topic --name MusicXmlFingeringFileNotification --output text --query 'TopicArn')
+
+12.  Configure Topic Policy
+
+  aws sns set-topic-attributes \
+    --topic-arn $TOPIC_ARN \
+    --attribute-name Policy \
+    --attribute-value '{
+      "Version": "2012-10-17",
+      "Id": "S3UploadPolicy",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "s3.amazonaws.com"
+          },
+          "Action": "sns:Publish",
+          "Resource": "'$TOPIC_ARN'",
+          "Condition": {
+            "ArnLike": {
+              "aws:SourceArn": "arn:aws:s3:::piano-fingering-output"
+            }
+          }
+        }
+      ]
+    }'
+
+13.  Configure S3 Event Notification
+
+aws s3api put-bucket-notification-configuration \
+  --bucket piano-fingering-output \
+  --notification-configuration '{
+    "TopicConfigurations": [
+      {
+        "TopicArn": "'$TOPIC_ARN'",
+        "Events": ["s3:ObjectCreated:*"]
+      }
+    ]
+  }'
+
 ## Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request with your changes.

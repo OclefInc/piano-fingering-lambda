@@ -26,12 +26,17 @@ def lambda_handler(event, context):
             input_key = record['object']['key']
             filename = os.path.basename(input_key)
             file_format = os.path.splitext(input_key)[1][1:] or 'musicxml'
+            # Process parameters - use default values since this is triggered by S3
+            hand_size = event.get('extraParams', {}).get('hand_size', 'M')  # Default hand size
+            rbeam = 0  # Default right hand part index
+            lbeam = 1  # Default left hand part index
 
             # Output bucket - either use environment variable or append "-output" to input bucket name
             output_bucket = os.environ.get('OUTPUT_S3_BUCKET', f"{input_bucket}-output")
-            output_key = f"processed/{filename}"
+            output_key = f"{filename}/{hand_size}"
 
             print(f"Processing file {input_key} from bucket {input_bucket}")
+            print(f"Hand size: {hand_size}")
 
             # Download the file from S3
             s3 = boto3.client('s3')
@@ -39,10 +44,6 @@ def lambda_handler(event, context):
                 s3.download_fileobj(input_bucket, input_key, temp_file)
                 input_file_path = temp_file.name
 
-            # Process parameters - use default values since this is triggered by S3
-            hand_size = 'M'  # Default hand size
-            rbeam = 0  # Default right hand part index
-            lbeam = 1  # Default left hand part index
 
         # Handle API Gateway or direct invocation
         else:
