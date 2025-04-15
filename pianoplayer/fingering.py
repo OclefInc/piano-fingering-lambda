@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 from music21 import converter
 from music21.articulations import Fingering
 from pianoplayer.hand import Hand
@@ -30,12 +31,19 @@ class FingeringGenerator:
             str: Path to the processed output file
         """
         # Create a temporary output file
+        print("Creating temporary output file")
         output_file = tempfile.NamedTemporaryFile(suffix='.musicxml', delete=False)
         output_path = output_file.name
         output_file.close()
 
         # Parse the input score
-        sf = converter.parse(self.file_path)
+        print(f"Parsing input file: {self.file_path}")
+        try:
+            sf = converter.parse(self.file_path)
+            print("Successfully parsed input file")
+        except Exception as e:
+            print(f"Error parsing input file: {str(e)}")
+            raise
 
         # Get beam indices for right and left hands
         rbeam = 0  # Default right hand beam
@@ -46,28 +54,40 @@ class FingeringGenerator:
                 rbeam = self.args.rbeam
             if hasattr(self.args, 'lbeam'):
                 lbeam = self.args.lbeam
+        print(f"Using beam indices: right={rbeam}, left={lbeam}")
 
         # Setup right hand
+        print(f"Setting up right hand with size {self.hand_size}")
         rh = Hand("right", self.hand_size)
         rh.verbose = self.verbose
         rh.autodepth = True
         rh.lyrics = False
 
         # Setup left hand
+        print(f"Setting up left hand with size {self.hand_size}")
         lh = Hand("left", self.hand_size)
         lh.verbose = self.verbose
         lh.autodepth = True
         lh.lyrics = False
 
-        # Process right hand with specified beam
+        # Process right hand
+        print("Reading right hand notes")
         rh.noteseq = reader(sf, beam=rbeam)
+        print(f"Starting right hand fingering generation (notes: {len(rh.noteseq)})")
+        start_time = time.time()
         rh.generate()
+        print(f"Right hand generation completed in {time.time() - start_time:.2f} seconds")
 
-        # Process left hand with specified beam
+        # Process left hand
+        print("Reading left hand notes")
         lh.noteseq = reader(sf, beam=lbeam)
+        print(f"Starting left hand fingering generation (notes: {len(lh.noteseq)})")
+        start_time = time.time()
         lh.generate()
+        print(f"Left hand generation completed in {time.time() - start_time:.2f} seconds")
 
-        # Annotate the score with fingerings, passing the args
+        # Annotate with fingerings
+        print("Annotating score with fingerings")
         sf = annotate_fingers_xml(sf, rh, args=self.args, is_right=True)
         sf = annotate_fingers_xml(sf, lh, args=self.args, is_right=False)
 
@@ -96,5 +116,6 @@ class FingeringGenerator:
 
         # Write the annotated score to file
         sf.write('xml', fp=output_path)
+        print(f"Fingered score written to {output_path}")
 
         return output_path

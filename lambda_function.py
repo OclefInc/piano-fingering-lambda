@@ -40,9 +40,36 @@ def lambda_handler(event, context):
 
             # Download the file from S3
             s3 = boto3.client('s3')
-            with tempfile.NamedTemporaryFile(suffix=f'.{file_format}', delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 s3.download_fileobj(input_bucket, input_key, temp_file)
-                input_file_path = temp_file.name
+                temp_file_path = temp_file.name  # Save the path here
+
+            # Determine file type and rename with correct extension
+            with open(temp_file_path, 'rb') as f:
+                first_bytes = f.read(4)
+                f.close()
+
+            # Create a new temporary file with proper extension
+            if first_bytes.startswith(b'PK\x03\x04'):
+                # For MXL files
+                print("Detected ZIP/MXL format")
+                temp_output_file = tempfile.NamedTemporaryFile(suffix='.mxl', delete=False)
+                input_file_path = temp_output_file.name
+                temp_output_file.close()
+            else:
+                # For regular XML files
+                print("Detected XML format")
+                temp_output_file = tempfile.NamedTemporaryFile(suffix='.musicxml', delete=False)
+                input_file_path = temp_output_file.name
+                temp_output_file.close()
+
+            # Copy the content from the downloaded file to the properly named file
+            with open(temp_file_path, 'rb') as src:
+                with open(input_file_path, 'wb') as dst:
+                    dst.write(src.read())
+
+            # Clean up the original temporary file
+            os.unlink(temp_file_path)
 
 
         # Handle API Gateway or direct invocation
