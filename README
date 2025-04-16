@@ -2,6 +2,10 @@
 
 This project is designed to assist with piano fingering suggestions using a serverless architecture powered by AWS Lambda.
 
+# Acknowledgments
+
+pianoplayer is a hard fork of Marco Musy pianoplayer [text](https://github.com/marcomusy/pianoplayer)
+
 ## Features
 
 - Generate optimal piano fingerings for given musical pieces.
